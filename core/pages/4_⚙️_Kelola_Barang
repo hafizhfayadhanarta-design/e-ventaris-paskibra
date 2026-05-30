@@ -1,0 +1,62 @@
+import streamlit as st
+import sys
+import os
+
+st.set_page_config(page_title="Daftar Barang | E-VENTARIS", layout="wide")
+
+# --- SUNTIKAN CSS ---
+st.markdown("""
+    <style>
+    .stApp { background-color: #ffffff !important; }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, th, td {
+        color: #001f3f !important;
+    }
+    [data-testid="stSidebar"] { background-color: #001f3f !important; }
+    [data-testid="stSidebar"] *, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span { color: #ffffff !important; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Mencari alamat folder utama (WEB_AKHIR)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# --- LOGIKA PENCARIAN FOLDER CORE (ANTI-GAGAL) ---
+def add_core_to_path():
+    current_path = os.path.abspath(os.path.dirname(__file__))
+    # Terus naik ke atas sampai menemukan folder yang mengandung 'core'
+    while current_path != os.path.dirname(current_path):
+        if 'core' in os.listdir(current_path):
+            if current_path not in sys.path:
+                sys.path.append(current_path)
+            return True
+        current_path = os.path.dirname(current_path)
+    return False
+
+if not add_core_to_path():
+    st.error("Folder 'core' tidak ditemukan di struktur proyekmu!")
+else:
+    try:
+        from core.database import add_data
+    except ImportError as e:
+        st.error(f"Gagal mengambil fungsi database!: {e}")
+
+# --- LANJUT KE FORM (Hanya muncul jika core ditemukan) ---
+if 'add_data' in globals():
+    st.title("Tambah Inventaris Baru")
+    
+    with st.form("form_inventaris", clear_on_submit=True):
+        nama = st.text_input("Nama Barang")
+        kategori = st.selectbox("Kategori", ["Seragam", "Kostum", "Peralatan Latihan", "Lainnya"])
+        jumlah = st.number_input("Jumlah Unit", min_value=1, step=1)
+        kondisi = st.radio("Kondisi Fisik", ["Baik", "Rusak Ringan", "Rusak Berat"])
+        status = st.selectbox("Status Keberadaan", ["Tersedia", "Dipinjam", "Hilang"])
+        
+        submit = st.form_submit_button("Simpan ke Database")
+
+    if submit:
+        if nama:
+            add_data(nama, kategori, jumlah, kondisi, status)
+            st.success(f"Berhasil! Barang '{nama}' telah tersimpan.")
+        else:
+            st.error("Nama barang wajib diisi!")
+
+            st.sidebar.image("static/logo_paskibra.jpg", use_container_width=True)
