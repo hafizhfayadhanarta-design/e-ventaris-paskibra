@@ -1,0 +1,123 @@
+import streamlit as st
+import sqlite3
+from datetime import datetime
+
+st.set_page_config(page_title="Form Peminjaman - E-VENTARIS", layout="centered")
+
+st.title("📋 Formulir Peminjaman Barang")
+st.write("Gunakan formulir ini untuk mendata pengurus atau anggota yang meminjam atribut/barang organisasi.")
+st.write("---")
+
+# --- SUNTIKAN CSS ---
+st.markdown("""
+    <style>
+    .stApp { background-color: #ffffff !important; }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, th, td {
+        color: #001f3f !important;
+    }
+    [data-testid="stSidebar"] { background-color: #001f3f !important; }
+    [data-testid="stSidebar"] *, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span { color: #ffffff !important; }
+    </style>
+""", unsafe_allow_html=True)
+
+import os
+
+# Mencari lokasi folder utama proyekmu secara otomatis
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, "paskibra.db")
+
+# ==========================================
+# 1. INISIALISASI TABEL PEMINJAMAN
+# ==========================================
+def inisialisasi_tabel_peminjaman():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Membuat tabel peminjaman jika belum ada
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS peminjaman (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama_peminang TEXT NOT NULL,
+            barang_dipinjam TEXT NOT NULL,
+            jumlah_pinjam INTEGER NOT NULL,
+            tgl_pinjam TEXT NOT NULL,
+            tgl_kembali TEXT,
+            status_pinjam TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+inisialisasi_tabel_peminjaman()
+
+# Helper untuk mengambil daftar barang dari tabel inventaris (untuk pilihan di dropdown)
+def ambil_daftar_barang():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT nama_barang FROM inventaris")
+        # Mengubah hasil query menjadi list teks biasa
+        daftar_barang = [baris[0] for baris in cursor.fetchall()]
+    except sqlite3.OperationalError:
+        # Jika tabel inventaris belum ada/kosong, beri pilihan manual
+        daftar_barang = []
+    conn.close()
+    return daftar_barang
+
+# ==========================================
+# 2. TAMPILAN FORMULIR PEMINJAMAN
+# ==========================================
+st.subheader("Data Peminjaman Baru")
+
+# Input Nama Peminjam
+nama_peminjam = st.text_input("Nama Lengkap Peminjam", placeholder="Contoh: Lionel Messi")
+
+# Pilihan Barang (Mengambil data dinamis dari database inventaris yang sudah kamu buat)
+opsi_barang = ambil_daftar_barang()
+
+# Input Kelas (TIDAK WAJIB / OPSIONAL)
+# Kita pakai selectbox agar rapi, ditambah pilihan kosong "-" di awal
+opsi_kelas = opsi_kelas = ["-", "Kelas X-1", "Kelas XI-1", "Kelas XII-1"]
+kelas_terpilih = st.text_input("Kelas (Opsional)", placeholder="Contoh: Kelas X-1")
+
+if opsi_barang:
+    barang_terpilih = st.selectbox("Barang yang Dipinjam", opsi_barang)
+else:
+    # Jika database inventaris masih kosong, pakai input teks biasa dulu sementara
+    barang_terpilih = st.text_input("Barang yang Dipinjam (Input Manual)", placeholder="Contoh: PDU Pa")
+
+# Input Jumlah
+jumlah_pinjam = st.number_input("Jumlah yang Dipinjam (Pcs/Unit)", min_value=1, step=1)
+
+# Input Tanggal Pinjam (Otomatis hari ini)
+tgl_pinjam = st.date_input("Tanggal Peminjaman", datetime.now())
+
+st.write("---")
+tombol_pinjam = st.button("Catat Peminjaman")
+
+# ==========================================
+# 3. PROSES SIMPAN DATA PEMINJAMAN
+# ==========================================
+if tombol_pinjam:
+    if nama_peminjam.strip() == "" or barang_terpilih.strip() == "":
+        st.error("Gagal mencatat: Nama peminjam dan nama barang tidak boleh kosong!")
+    else:
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            
+            # Format tanggal menjadi teks biasa (YYYY-MM-DD)
+            tgl_str = tgl_pinjam.strftime("%Y-%m-%d")
+            
+            # Masukkan data dengan status awal "Dipinjam"
+            cursor.execute('''
+                INSERT INTO peminjaman (nama_peminang, barang_dipinjam, jumlah_pinjam, tgl_pinjam, status_pinjam)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (nama_peminjam, barang_terpilih, int(jumlah_pinjam), tgl_str, "Dipinjam"))
+            
+            conn.commit()
+            conn.close()
+            
+            st.success(f"🎉 Sukses! Peminjaman **{barang_terpilih}** ({jumlah_pinjam} unit) oleh **{nama_peminjam}** berhasil dicatat!")
+            
+        except Exception as e:
+            st.error(f"Terjadi kesalahan sistem: {e}")
